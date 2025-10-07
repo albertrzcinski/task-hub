@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type { LoginRequest, LoginResponse, User } from '../types/user';
+import type { Task, CreateTaskRequest, UpdateTaskRequest } from '../types/task';
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api',
@@ -61,12 +62,19 @@ export const api = {
     const { data } = await apiClient.get<User>('/auth/me');
     return data;
   },
-  async listTasks() {
-    const { data } = await apiClient.get('/tasks');
+  async listTasks(): Promise<Task[]> {
+    const { data } = await apiClient.get<Task[]>('/tasks');
     return data;
   },
-  async createTask(task: any) {
-    const { data } = await apiClient.post('/tasks', task);
+  async createTask(task: CreateTaskRequest): Promise<Task> {
+    const { data } = await apiClient.post<Task>('/tasks', task);
     return data;
+  },
+  async updateTask(updates: UpdateTaskRequest): Promise<Task> {
+    const { data } = await apiClient.put<Task>(`/tasks/${updates.id}`, updates);
+    return data;
+  },
+  async deleteTask(id: string): Promise<void> {
+    await apiClient.delete(`/tasks/${id}`);
   },
 };

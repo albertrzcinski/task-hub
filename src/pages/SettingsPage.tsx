@@ -14,7 +14,9 @@ export default function SettingsPage() {
       </Typography>
       <Stack direction="row" spacing={2}>
         <Typography>Bieżący motyw: {mode}</Typography>
-        <Button onClick={toggleMode} variant="outlined">Przełącz motyw</Button>
+        <Button onClick={toggleMode} variant="outlined">
+          Przełącz motyw
+        </Button>
       </Stack>
     </>
   );

@@ -15,11 +15,14 @@ const LoginPage = lazy(() => import('./pages/LoginPage'));
 export default function App() {
   const { mode } = useThemeContext();
 
-  const theme = useMemo(() =>
-    createTheme({
-      palette: { mode },
-      typography: { fontFamily: 'Inter, Roboto, Helvetica, Arial, sans-serif' },
-    }), [mode]);
+  const theme = useMemo(
+    () =>
+      createTheme({
+        palette: { mode },
+        typography: { fontFamily: 'Inter, Roboto, Helvetica, Arial, sans-serif' },
+      }),
+    [mode],
+  );
 
   return (
     <ThemeProvider theme={theme}>
@@ -33,11 +36,17 @@ export default function App() {
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            <Link to="/" style={{ color: 'inherit', textDecoration: 'none' }}>TaskHub</Link>
+            <Link to="/" style={{ color: 'inherit', textDecoration: 'none' }}>
+              TaskHub
+            </Link>
           </Typography>
           <Box component="nav" aria-label="Główna nawigacja">
-            <Link to="/tasks" className="nav-link">Zadania</Link>
-            <Link to="/settings" className="nav-link">Ustawienia</Link>
+            <Link to="/tasks" className="nav-link">
+              Zadania
+            </Link>
+            <Link to="/settings" className="nav-link">
+              Ustawienia
+            </Link>
           </Box>
         </Toolbar>
       </AppBar>

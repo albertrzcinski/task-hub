@@ -11,7 +11,12 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation() as any;
   const from = location.state?.from?.pathname || '/';
-  const { register, handleSubmit, formState: { isSubmitting, errors }, setError } = useForm<FormValues>();
+  const {
+    register,
+    handleSubmit,
+    formState: { isSubmitting, errors },
+    setError,
+  } = useForm<FormValues>();
 
   const onSubmit = async ({ email, password }: FormValues) => {
     try {
@@ -30,12 +35,31 @@ export default function LoginPage() {
       <Typography variant="h4" component="h1" gutterBottom>
         Logowanie
       </Typography>
+      <Alert severity="info" sx={{ mb: 3, maxWidth: 400 }}>
+        <strong>Demo:</strong> Użyj dowolnego email i hasła do logowania
+      </Alert>
       <Box component="form" onSubmit={handleSubmit(onSubmit)} noValidate>
         <Stack spacing={2} sx={{ maxWidth: 400 }}>
-          <TextField label="Email" type="email" required {...register('email', { required: 'Podaj email' })} error={!!errors.email} helperText={errors.email?.message} />
-          <TextField label="Hasło" type="password" required {...register('password', { required: 'Podaj hasło' })} error={!!errors.password} helperText={errors.password?.message} />
+          <TextField
+            label="Email"
+            type="email"
+            required
+            {...register('email', { required: 'Podaj email' })}
+            error={!!errors.email}
+            helperText={errors.email?.message}
+          />
+          <TextField
+            label="Hasło"
+            type="password"
+            required
+            {...register('password', { required: 'Podaj hasło' })}
+            error={!!errors.password}
+            helperText={errors.password?.message}
+          />
           {errors.root?.message && <Alert severity="error">{errors.root?.message}</Alert>}
-          <Button type="submit" variant="contained" disabled={isSubmitting}>Zaloguj</Button>
+          <Button type="submit" variant="contained" disabled={isSubmitting}>
+            Zaloguj
+          </Button>
         </Stack>
       </Box>
     </>

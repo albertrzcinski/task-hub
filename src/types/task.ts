@@ -1,5 +1,6 @@
 export type TaskStatus = 'todo' | 'in_progress' | 'done';
 export type TaskPriority = 'low' | 'med' | 'high';
+
 export type Task = {
   id: string;
   title: string;
@@ -12,3 +13,9 @@ export type Task = {
   updatedAt: string;
   assignee?: string;
 };
+
+export type CreateTaskRequest = Pick<
+  Task,
+  'title' | 'description' | 'status' | 'priority' | 'dueDate'
+>;
+export type UpdateTaskRequest = Partial<CreateTaskRequest> & { id: string };

@@ -6,7 +6,7 @@ test('renders welcome message', () => {
   render(
     <HelmetProvider>
       <HomePage />
-    </HelmetProvider>
+    </HelmetProvider>,
   );
   expect(screen.getByRole('heading', { level: 1, name: /Witaj w TaskHub/i })).toBeInTheDocument();
 });

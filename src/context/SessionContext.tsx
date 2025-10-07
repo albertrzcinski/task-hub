@@ -26,10 +26,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     fetchMe();
   }, [fetchMe]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    await api.login({ email, password });
-    await fetchMe();
-  }, [fetchMe]);
+  const login = useCallback(
+    async (email: string, password: string) => {
+      await api.login({ email, password });
+      await fetchMe();
+    },
+    [fetchMe],
+  );
 
   const logout = useCallback(async () => {
     await api.logout();
