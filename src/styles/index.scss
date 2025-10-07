@@ -1,0 +1,18 @@
+@use 'sass:color';
+
+:root {
+  --space: 8px;
+}
+
+body {
+  font-family: Inter, Roboto, Helvetica, Arial, sans-serif;
+}
+
+.nav-link {
+  color: white;
+  text-decoration: none;
+  margin-left: var(--space);
+}
+.nav-link:hover {
+  text-decoration: underline;
+}

@@ -1,0 +1,72 @@
+import axios from 'axios';
+import type { LoginRequest, LoginResponse, User } from '../types/user';
+
+const apiClient = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || '/api',
+  withCredentials: true, // for httpOnly cookies in real backend
+  timeout: 8000,
+});
+
+let isRefreshing = false;
+let pendingRequests: Array<(token: string | null) => void> = [];
+
+apiClient.interceptors.response.use(
+  (res) => res,
+  async (error) => {
+    const { response, config } = error || {};
+    if (!response) throw error;
+    if (response.status === 401 && !config._retry) {
+      config._retry = true;
+      try {
+        const token = await refreshToken();
+        pendingRequests.forEach((cb) => cb(token));
+        pendingRequests = [];
+        return apiClient(config);
+      } catch (e) {
+        pendingRequests.forEach((cb) => cb(null));
+        pendingRequests = [];
+        throw e;
+      }
+    }
+    if (response.status === 429) {
+      await new Promise((r) => setTimeout(r, 1000));
+      return apiClient(config);
+    }
+    throw error;
+  },
+);
+
+async function refreshToken(): Promise<string> {
+  if (isRefreshing) {
+    return new Promise((resolve) => pendingRequests.push(() => resolve('refreshed')));
+  }
+  isRefreshing = true;
+  try {
+    await apiClient.post('/auth/refresh');
+    return 'refreshed';
+  } finally {
+    isRefreshing = false;
+  }
+}
+
+export const api = {
+  async login(payload: LoginRequest): Promise<LoginResponse> {
+    const { data } = await apiClient.post<LoginResponse>('/auth/login', payload);
+    return data;
+  },
+  async logout(): Promise<void> {
+    await apiClient.post('/auth/logout');
+  },
+  async getMe(): Promise<User> {
+    const { data } = await apiClient.get<User>('/auth/me');
+    return data;
+  },
+  async listTasks() {
+    const { data } = await apiClient.get('/tasks');
+    return data;
+  },
+  async createTask(task: any) {
+    const { data } = await apiClient.post('/tasks', task);
+    return data;
+  },
+};
