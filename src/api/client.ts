@@ -1,11 +1,17 @@
 import axios from 'axios';
 import type { LoginRequest, LoginResponse, User } from '../types/user';
-import type { Task, CreateTaskRequest, UpdateTaskRequest } from '../types/task';
+import type {
+  Task,
+  CreateTaskRequest,
+  UpdateTaskRequest,
+  TaskListResponse,
+  TaskListParams,
+} from '../types/task';
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api',
   withCredentials: true, // for httpOnly cookies in real backend
-  timeout: 8000,
+  timeout: 10000,
 });
 
 let isRefreshing = false;
@@ -16,6 +22,8 @@ apiClient.interceptors.response.use(
   async (error) => {
     const { response, config } = error || {};
     if (!response) throw error;
+
+    // Handle 401 with refresh token logic
     if (response.status === 401 && !config._retry) {
       config._retry = true;
       try {
@@ -29,10 +37,13 @@ apiClient.interceptors.response.use(
         throw e;
       }
     }
+
+    // Handle rate limiting
     if (response.status === 429) {
       await new Promise((r) => setTimeout(r, 1000));
       return apiClient(config);
     }
+
     throw error;
   },
 );
@@ -62,8 +73,18 @@ export const api = {
     const { data } = await apiClient.get<User>('/auth/me');
     return data;
   },
-  async listTasks(): Promise<Task[]> {
-    const { data } = await apiClient.get<Task[]>('/tasks');
+  async listTasks(params: TaskListParams = {}): Promise<TaskListResponse> {
+    const searchParams = new URLSearchParams();
+
+    if (params.page) searchParams.set('page', params.page.toString());
+    if (params.limit) searchParams.set('limit', params.limit.toString());
+    if (params.search) searchParams.set('search', params.search);
+    if (params.status) searchParams.set('status', params.status);
+
+    const query = searchParams.toString();
+    const url = query ? `/tasks?${query}` : '/tasks';
+
+    const { data } = await apiClient.get<TaskListResponse>(url);
     return data;
   },
   async createTask(task: CreateTaskRequest): Promise<Task> {

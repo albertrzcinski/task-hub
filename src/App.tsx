@@ -6,6 +6,7 @@ import MenuIcon from '@mui/icons-material/Menu';
 import { Helmet } from 'react-helmet-async';
 import { useThemeContext } from './context/ThemeContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const HomePage = lazy(() => import('./pages/HomePage'));
 const TasksPage = lazy(() => import('./pages/TasksPage'));
@@ -51,17 +52,19 @@ export default function App() {
         </Toolbar>
       </AppBar>
       <Container component="main" sx={{ py: 3 }}>
-        <Suspense fallback={<p>Ładowanie…</p>}>
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route element={<ProtectedRoute />}>
-              <Route path="/tasks" element={<TasksPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-            </Route>
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
+        <ErrorBoundary>
+          <Suspense fallback={<p>Ładowanie…</p>}>
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route element={<ProtectedRoute />}>
+                <Route path="/tasks" element={<TasksPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+              </Route>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </ErrorBoundary>
       </Container>
     </ThemeProvider>
   );

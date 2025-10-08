@@ -6,6 +6,7 @@ import { useSession } from '../context/SessionContext';
 export default function SettingsPage() {
   const { mode, toggleMode } = useThemeContext();
   const { logout } = useSession();
+
   return (
     <>
       <Helmet>
@@ -14,6 +15,7 @@ export default function SettingsPage() {
       <Typography variant="h4" component="h1" gutterBottom>
         Ustawienia
       </Typography>
+
       <Typography gutterBottom>Bieżący motyw: {mode}</Typography>
       <Stack direction="row" spacing={2}>
         <Button onClick={toggleMode} variant="outlined">

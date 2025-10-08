@@ -17,9 +17,13 @@ import {
   DialogContent,
   DialogActions,
   Alert,
+  CircularProgress,
+  Pagination,
+  Skeleton,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import SearchIcon from '@mui/icons-material/Search';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -28,6 +32,8 @@ import type {
   Task,
   CreateTaskRequest as _CreateTaskRequest,
   UpdateTaskRequest as _UpdateTaskRequest,
+  TaskListResponse as _TaskListResponse,
+  PaginationInfo,
 } from '../types/task';
 
 const createSchema = z.object({
@@ -51,9 +57,14 @@ type EditFormValues = z.infer<typeof editSchema>;
 
 export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [pagination, setPagination] = useState<PaginationInfo | null>(null);
   const [filter, setFilter] = useState<'all' | Task['status']>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   // Create form
   const {
@@ -75,24 +86,50 @@ export default function TasksPage() {
     formState: { errors: editErrors, isSubmitting: isEditing },
   } = useForm<EditFormValues>({ resolver: zodResolver(editSchema) });
 
+  // Load tasks function with enhanced loading states
+  const loadTasks = async (page = 1, search = '', statusFilter?: Task['status']) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const params = {
+        page,
+        limit: 10,
+        search: search.trim() || undefined,
+        status: statusFilter,
+      };
+
+      const response = await api.listTasks(params);
+      setTasks(response.tasks);
+      setPagination(response.pagination);
+      setCurrentPage(page);
+    } catch {
+      setTasks([]);
+      setPagination(null);
+      setError('Nie udało się pobrać zadań. Sprawdź połączenie sieciowe.');
+    } finally {
+      setIsLoading(false);
+      setIsInitialLoading(false);
+    }
+  };
+
   useEffect(() => {
-    api
-      .listTasks()
-      .then(setTasks)
-      .catch((_err) => {
-        setTasks([]);
-        setError('Nie udało się pobrać zadań');
-      });
-  }, []);
+    const timeoutId = setTimeout(() => {
+      loadTasks(1, searchQuery, filter !== 'all' ? filter : undefined);
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [filter, searchQuery]); // Debounced search with filter
 
   const onCreateSubmit = async (values: CreateFormValues) => {
     try {
       setError(null);
-      const created = await api.createTask(values);
-      setTasks((prev) => [created, ...prev]);
+      await api.createTask(values);
+      // Refresh the current page to show the new task
+      await loadTasks(1, searchQuery, filter !== 'all' ? filter : undefined);
       resetCreate();
     } catch {
-      setError('Nie udało się dodać zadania');
+      setError('Nie udało się dodać zadania. Spróbuj ponownie.');
     }
   };
 
@@ -101,11 +138,12 @@ export default function TasksPage() {
     try {
       setError(null);
       const updated = await api.updateTask({ ...values, id: editingTask.id });
+      // Update the task in current list optimistically
       setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
       setEditingTask(null);
       resetEdit();
     } catch {
-      setError('Nie udało się zaktualizować zadania');
+      setError('Nie udało się zaktualizować zadania. Spróbuj ponownie.');
     }
   };
 
@@ -123,13 +161,20 @@ export default function TasksPage() {
     try {
       setError(null);
       await api.deleteTask(id);
+      // Remove from current list optimistically
       setTasks((prev) => prev.filter((t) => t.id !== id));
+      // Update pagination if needed
+      if (pagination) {
+        setPagination((prev) => (prev ? { ...prev, total: prev.total - 1 } : null));
+      }
     } catch {
-      setError('Nie udało się usunąć zadania');
+      setError('Nie udało się usunąć zadania. Spróbuj ponownie.');
     }
   };
 
-  const filteredTasks = filter === 'all' ? tasks : tasks.filter((t) => t.status === filter);
+  const handlePageChange = (_event: React.ChangeEvent<unknown>, page: number) => {
+    loadTasks(page, searchQuery, filter !== 'all' ? filter : undefined);
+  };
 
   const getStatusLabel = (status: Task['status']) => {
     const labels = { todo: 'Do zrobienia', in_progress: 'W trakcie', done: 'Zakończone' };
@@ -140,6 +185,25 @@ export default function TasksPage() {
     const colors = { low: 'success', med: 'warning', high: 'error' } as const;
     return colors[priority];
   };
+
+  // Loading skeleton component
+  const TaskSkeleton = () => (
+    <Box
+      p={2}
+      borderRadius={1}
+      sx={{ bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}
+    >
+      <Stack spacing={1}>
+        <Skeleton variant="text" width="60%" height={24} />
+        <Skeleton variant="text" width="80%" height={20} />
+        <Stack direction="row" spacing={1}>
+          <Skeleton variant="rectangular" width={80} height={24} />
+          <Skeleton variant="rectangular" width={60} height={24} />
+          <Skeleton variant="rectangular" width={100} height={24} />
+        </Stack>
+      </Stack>
+    </Box>
+  );
 
   return (
     <>
@@ -156,8 +220,18 @@ export default function TasksPage() {
         </Alert>
       )}
 
-      {/* Filter */}
-      <Box sx={{ mb: 3 }}>
+      {/* Search and Filter */}
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3 }}>
+        <TextField
+          placeholder="Szukaj zadań..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          InputProps={{
+            startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+          }}
+          sx={{ flexGrow: 1 }}
+          size="small"
+        />
         <FormControl size="small" sx={{ minWidth: 200 }}>
           <InputLabel>Filtruj według statusu</InputLabel>
           <Select
@@ -171,7 +245,7 @@ export default function TasksPage() {
             <MenuItem value="done">Zakończone</MenuItem>
           </Select>
         </FormControl>
-      </Box>
+      </Stack>
 
       {/* Create form */}
       <Box component="form" onSubmit={handleCreateSubmit(onCreateSubmit)} noValidate sx={{ mb: 3 }}>
@@ -182,11 +256,17 @@ export default function TasksPage() {
             error={!!createErrors.title}
             helperText={createErrors.title?.message}
             required
+            disabled={isLoading}
           />
-          <TextField label="Opis" {...registerCreate('description')} />
+          <TextField label="Opis" {...registerCreate('description')} disabled={isLoading} />
           <FormControl size="small" sx={{ minWidth: 120 }}>
             <InputLabel>Status</InputLabel>
-            <Select {...registerCreate('status')} label="Status" defaultValue="todo">
+            <Select
+              {...registerCreate('status')}
+              label="Status"
+              defaultValue="todo"
+              disabled={isLoading}
+            >
               <MenuItem value="todo">Do zrobienia</MenuItem>
               <MenuItem value="in_progress">W trakcie</MenuItem>
               <MenuItem value="done">Zakończone</MenuItem>
@@ -194,7 +274,12 @@ export default function TasksPage() {
           </FormControl>
           <FormControl size="small" sx={{ minWidth: 120 }}>
             <InputLabel>Priorytet</InputLabel>
-            <Select {...registerCreate('priority')} label="Priorytet" defaultValue="med">
+            <Select
+              {...registerCreate('priority')}
+              label="Priorytet"
+              defaultValue="med"
+              disabled={isLoading}
+            >
               <MenuItem value="low">Niski</MenuItem>
               <MenuItem value="med">Średni</MenuItem>
               <MenuItem value="high">Wysoki</MenuItem>
@@ -205,74 +290,128 @@ export default function TasksPage() {
             label="Termin"
             {...registerCreate('dueDate')}
             InputLabelProps={{ shrink: true }}
+            disabled={isLoading}
           />
-          <Button type="submit" variant="contained" disabled={isCreating}>
-            Dodaj
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={isCreating || isLoading}
+            startIcon={isCreating ? <CircularProgress size={16} /> : undefined}
+          >
+            {isCreating ? 'Dodawanie...' : 'Dodaj'}
           </Button>
         </Stack>
       </Box>
 
       {/* Tasks list */}
-      <Stack spacing={1}>
-        {filteredTasks.map((task) => (
-          <Box
-            key={task.id}
-            p={2}
-            borderRadius={1}
-            sx={{ bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}
-          >
-            <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-              <Box sx={{ flexGrow: 1 }}>
-                <Typography variant="subtitle1">{task.title}</Typography>
-                {task.description && (
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    {task.description}
-                  </Typography>
-                )}
-                <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
-                  <Chip label={getStatusLabel(task.status)} size="small" variant="outlined" />
-                  <Chip
-                    label={task.priority}
-                    size="small"
-                    color={getPriorityColor(task.priority)}
-                  />
-                  {task.dueDate && (
-                    <Chip
-                      label={new Date(task.dueDate).toLocaleDateString('pl')}
+      {isInitialLoading ? (
+        <Stack spacing={1}>
+          {Array.from({ length: 3 }).map((_, index) => (
+            <TaskSkeleton key={index} />
+          ))}
+        </Stack>
+      ) : tasks.length === 0 ? (
+        <Box textAlign="center" py={4}>
+          <Typography variant="h6" color="text.secondary">
+            {searchQuery ? 'Nie znaleziono zadań' : 'Brak zadań'}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {searchQuery ? 'Spróbuj zmienić wyszukiwanie' : 'Dodaj pierwsze zadanie aby rozpocząć'}
+          </Typography>
+        </Box>
+      ) : (
+        <>
+          <Stack spacing={1} sx={{ mb: 3 }}>
+            {tasks.map((task) => (
+              <Box
+                key={task.id}
+                p={2}
+                borderRadius={1}
+                sx={{
+                  bgcolor: 'background.paper',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  opacity: isLoading ? 0.7 : 1,
+                  transition: 'opacity 0.2s',
+                }}
+              >
+                <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                  <Box sx={{ flexGrow: 1 }}>
+                    <Typography variant="subtitle1">{task.title}</Typography>
+                    {task.description && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        {task.description}
+                      </Typography>
+                    )}
+                    <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+                      <Chip label={getStatusLabel(task.status)} size="small" variant="outlined" />
+                      <Chip
+                        label={task.priority}
+                        size="small"
+                        color={getPriorityColor(task.priority)}
+                      />
+                      {task.dueDate && (
+                        <Chip
+                          label={new Date(task.dueDate).toLocaleDateString('pl')}
+                          size="small"
+                          variant="outlined"
+                        />
+                      )}
+                    </Stack>
+                    {task.tags.length > 0 && (
+                      <Stack direction="row" spacing={0.5}>
+                        {task.tags.map((tag) => (
+                          <Chip key={tag} label={tag} size="small" />
+                        ))}
+                      </Stack>
+                    )}
+                  </Box>
+                  <Stack direction="row" spacing={1}>
+                    <IconButton
                       size="small"
-                      variant="outlined"
-                    />
-                  )}
-                </Stack>
-                {task.tags.length > 0 && (
-                  <Stack direction="row" spacing={0.5}>
-                    {task.tags.map((tag) => (
-                      <Chip key={tag} label={tag} size="small" />
-                    ))}
+                      onClick={() => handleEdit(task)}
+                      aria-label={`Edytuj zadanie ${task.title}`}
+                      disabled={isLoading}
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      onClick={() => handleDelete(task.id)}
+                      aria-label={`Usuń zadanie ${task.title}`}
+                      color="error"
+                      disabled={isLoading}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
                   </Stack>
-                )}
+                </Stack>
               </Box>
-              <Stack direction="row" spacing={1}>
-                <IconButton
-                  size="small"
-                  onClick={() => handleEdit(task)}
-                  aria-label={`Edytuj zadanie ${task.title}`}
-                >
-                  <EditIcon fontSize="small" />
-                </IconButton>
-                <IconButton
-                  size="small"
-                  onClick={() => handleDelete(task.id)}
-                  aria-label={`Usuń zadanie ${task.title}`}
-                  color="error"
-                >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
-              </Stack>
-            </Stack>
-          </Box>
-        ))}
-      </Stack>
+            ))}
+          </Stack>
+
+          {/* Pagination */}
+          {pagination && pagination.totalPages > 1 && (
+            <Box display="flex" justifyContent="center" sx={{ mt: 3 }}>
+              <Pagination
+                count={pagination.totalPages}
+                page={currentPage}
+                onChange={handlePageChange}
+                disabled={isLoading}
+                showFirstButton
+                showLastButton
+              />
+            </Box>
+          )}
+
+          {/* Loading overlay for pagination */}
+          {isLoading && !isInitialLoading && (
+            <Box display="flex" justifyContent="center" sx={{ mt: 2 }}>
+              <CircularProgress size={24} />
+            </Box>
+          )}
+        </>
+      )}
 
       {/* Edit Dialog */}
       <Dialog open={!!editingTask} onClose={() => setEditingTask(null)} maxWidth="sm" fullWidth>
