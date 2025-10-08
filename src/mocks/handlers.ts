@@ -47,7 +47,13 @@ const generateTask = (id: number): Task => ({
 let tasks: Task[] = Array.from({ length: 25 }, (_, i) => generateTask(i + 1));
 
 export const handlers = [
-  http.post('/api/auth/login', async () => {
+  http.post('/api/auth/login', async ({ request }: { request: Request }) => {
+    const { email, password } = await request.json();
+    const VALID_USERS = [{ email: 'user@taskhub.dev', password: 'password' }];
+    const user = VALID_USERS.find((u) => u.email === email && u.password === password);
+    if (!user) {
+      return new HttpResponse(null, { status: 404 });
+    }
     isLoggedIn = true;
     setSessionState(true);
     return HttpResponse.json({ ok: true });
